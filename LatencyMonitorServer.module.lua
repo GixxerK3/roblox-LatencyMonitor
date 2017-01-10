@@ -197,8 +197,10 @@ function monitorLatency()
 					entry.Samples = entry.Samples + 1
 				end
 	
-				local latency = pongReceivedTick - pingSentTick 
+				local latency = pongReceivedTick - pingSentTick
+				entry.LastLatency = latency 
 				local tickOffset = pongReceivedTick - clientTick -- change to AvgLatency?
+				entry.LastTickOffset = tickOffset
 		
 				-- Running average over up to 5 samples		
 				local avgLatency = entry.AvgLatency
@@ -209,20 +211,11 @@ function monitorLatency()
 				
 				local avgTickOffset = entry.AvgTickOffset
 				avgTickOffset = avgTickOffset - (avgTickOffset / samples)
-				avgTickOffset = avgTickOffset +  (tickOffset / samples)
+				avgTickOffset = avgTickOffset +  (math.abs(tickOffset) / samples)
 				entry.AvgTickOffset = avgTickOffset
-				
-				print("Player ", entry.ID, " - PingTx: ", pingSentTick, 
-					"; ClientTick: ", clientTick,				
-					"; PongRx: ", pongReceivedTick,
-					"; Latency: ", latency,
-					"; AvgLatency: ", avgLatency,
-					"; TickOffset: ", tickOffset,
-					"; AvgTickOffset: ", avgTickOffset, 
-					"; Samples: ", samples)
-				
-				-- On the next iteration, use the next player entry
 			end
+			
+			-- On the next iteration, use the next player entry
 			nextPlayerEntry = entry.Next
 		else
 			-- Either nextPlayerEntry is nil and there are no players to retrieve, or the player
@@ -238,6 +231,27 @@ end
 
 -----------------------------------------------------------------
 
+---- Public Methods ---------------------------------------------
+-- Returns a copy of all entries without the linked list properties so server code that uses
+-- GetLatency() can't manipulate .Next or .Prev and break the monitor.
+function LatencyMonitorServer:GetLatency()
+	local result = {}
+	local entry = entries.First
+	while entry ~= nil do
+		table.insert(result, { 
+			ID = entry.ID,
+			LastLatency = entry.LastLatency,
+			AvgLatency = entry.AvgLatency,
+			LastTickOffset = entry.LastTickOffset,
+			AvgTickOffset = entry.AvgTickOffset
+		})
+		entry = entry.Next
+	end
+	return result
+end
+-----------------------------------------------------------------
+
+-- Create the LMS singleton
 monitor = LatencyMonitorServer:new()
 
 -- spawn() will cause monitorLatency() to be executed AFTER this module script returns the LMS
